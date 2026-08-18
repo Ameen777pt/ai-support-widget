@@ -356,6 +356,18 @@ export interface Database {
         };
         Returns: string;
       };
+      get_public_widget_config: {
+        Args: {
+          p_public_widget_key: string;
+        };
+        Returns: {
+          brand_name: string;
+          brand_color: string;
+          welcome_message: string;
+          logo_url: string | null;
+          position: string;
+        }[];
+      };
     };
     Enums: {
       workspace_role: WorkspaceRole;
