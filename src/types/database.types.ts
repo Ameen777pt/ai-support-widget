@@ -368,6 +368,45 @@ export interface Database {
           position: string;
         }[];
       };
+      create_or_get_widget_conversation: {
+        Args: {
+          p_public_widget_key: string;
+          p_visitor_id: string;
+        };
+        Returns: {
+          conversation_id: string;
+          status: ConversationStatus;
+          created_at: string;
+        }[];
+      };
+      send_visitor_message: {
+        Args: {
+          p_public_widget_key: string;
+          p_visitor_id: string;
+          p_conversation_id: string;
+          p_content: string;
+        };
+        Returns: {
+          message_id: string;
+          conversation_id: string;
+          sender_type: MessageSenderType;
+          content: string;
+          created_at: string;
+        }[];
+      };
+      get_conversation_messages: {
+        Args: {
+          p_public_widget_key: string;
+          p_visitor_id: string;
+          p_conversation_id: string;
+        };
+        Returns: {
+          message_id: string;
+          sender_type: MessageSenderType;
+          content: string;
+          created_at: string;
+        }[];
+      };
     };
     Enums: {
       workspace_role: WorkspaceRole;

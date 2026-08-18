@@ -1,8 +1,35 @@
 import { signOutAction } from "@/app/actions/auth";
 import { requireWorkspace } from "@/lib/auth/workspace";
+import { createClient } from "@/lib/supabase/server";
+import { WidgetSettingsForm } from "./widget-settings-form";
+
+interface WidgetSettingsRow {
+  brand_name: string;
+  brand_color: string;
+  welcome_message: string;
+  logo_url: string | null;
+  position: string;
+}
 
 export default async function DashboardPage() {
   const { user, workspace, membership } = await requireWorkspace();
+
+  const supabase = await createClient();
+  const { data: settingsData } = await supabase
+    .from("widget_settings")
+    .select("brand_name, brand_color, welcome_message, logo_url, position")
+    .eq("workspace_id", workspace.id)
+    .single();
+
+  const settings: WidgetSettingsRow = settingsData || {
+    brand_name: workspace.name,
+    brand_color: "#0F172A",
+    welcome_message: "Hi! How can we help you today?",
+    logo_url: null,
+    position: "bottom-right",
+  };
+
+  const isReadOnly = membership.role === "member";
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950 sm:p-8">
@@ -57,7 +84,7 @@ export default async function DashboardPage() {
               </code>
             </div>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Client key for embedding the chat widget
+              Client key for public widget resolution
             </p>
           </div>
 
@@ -78,18 +105,12 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Status Callout */}
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 dark:border-emerald-950 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-3">
-            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>
-            <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-              Workspace Context Active (Day 3B.2)
-            </h2>
-          </div>
-          <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">
-            Server-side workspace context resolved cleanly and securely from user session with React cache deduplication.
-          </p>
-        </div>
+        {/* Widget Settings & Configuration Form */}
+        <WidgetSettingsForm
+          initialSettings={settings}
+          isReadOnly={isReadOnly}
+          publicWidgetKey={workspace.public_widget_key}
+        />
       </div>
     </div>
   );
