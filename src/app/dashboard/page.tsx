@@ -1,45 +1,8 @@
 import { signOutAction } from "@/app/actions/auth";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-
-interface WorkspaceInfo {
-  id: string;
-  name: string;
-  slug: string;
-  public_widget_key: string;
-  created_at: string;
-}
+import { requireWorkspace } from "@/lib/auth/workspace";
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    redirect("/login");
-  }
-
-  // Fetch the user's primary workspace membership
-  const { data: memberRecords, error: memberError } = await supabase
-    .from("workspace_members")
-    .select("role, workspace_id, workspaces(id, name, slug, public_widget_key, created_at)")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (memberError || !memberRecords || memberRecords.length === 0) {
-    redirect("/onboarding");
-  }
-
-  const primaryMembership = memberRecords[0];
-  const workspace = primaryMembership.workspaces as unknown as WorkspaceInfo;
-  const userRole = primaryMembership.role;
-
-  if (!workspace) {
-    redirect("/onboarding");
-  }
+  const { user, workspace, membership } = await requireWorkspace();
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950 sm:p-8">
@@ -52,7 +15,7 @@ export default async function DashboardPage() {
                 {workspace.name}
               </h1>
               <span className="inline-flex items-center rounded-md bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-800 capitalize dark:bg-zinc-800 dark:text-zinc-300">
-                Role: {userRole}
+                Role: {membership.role}
               </span>
             </div>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -120,11 +83,11 @@ export default async function DashboardPage() {
           <div className="flex items-center gap-3">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>
             <h2 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-              Workspace Provisioning Active (Day 3B.1)
+              Workspace Context Active (Day 3B.2)
             </h2>
           </div>
           <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">
-            Your workspace has been initialized with owner permissions, unique slug constraints, and default widget settings.
+            Server-side workspace context resolved cleanly and securely from user session with React cache deduplication.
           </p>
         </div>
       </div>
