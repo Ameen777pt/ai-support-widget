@@ -9,7 +9,7 @@ RETURNS TABLE (
   brand_color TEXT,
   welcome_message TEXT,
   logo_url TEXT,
-  position TEXT
+  "position" TEXT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -24,7 +24,7 @@ BEGIN
     ws.brand_color,
     ws.welcome_message,
     ws.logo_url,
-    ws.position
+    ws."position"
   FROM public.workspaces w
   JOIN public.widget_settings ws ON ws.workspace_id = w.id
   WHERE w.public_widget_key = p_public_widget_key
