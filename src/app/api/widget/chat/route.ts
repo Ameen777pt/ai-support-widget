@@ -110,25 +110,41 @@ export async function POST(request: NextRequest) {
 
   const createdMsg = msgData[0];
 
-  // 1. Retrieve existing conversation history (including the newly created visitor message)
-  const { data: historyMessages } = await supabase.rpc(
-    "get_conversation_messages",
-    {
+  // 1. Concurrently retrieve existing conversation history and public widget config
+  const [historyResult, configResult] = await Promise.all([
+    supabase.rpc("get_conversation_messages", {
       p_public_widget_key: widgetKey,
       p_visitor_id: visitorId,
       p_conversation_id: conversationId,
-    },
-  );
+    }),
+    supabase.rpc("get_public_widget_config", {
+      p_public_widget_key: widgetKey,
+    }),
+  ]);
 
   const rawHistory: Array<{ sender_type: string; content: string }> =
-    (historyMessages as unknown as Array<{ sender_type: string; content: string }>) || [];
+    (historyResult.data as unknown as Array<{ sender_type: string; content: string }>) || [];
 
   const historyItems = rawHistory.length > 0
     ? rawHistory
     : [{ sender_type: "user", content }];
 
-  // 2. Generate Gemini AI Response
-  const botReplyText = await generateSupportResponse(historyItems);
+  // Extract public branding context safely (only brand_name and welcome_message)
+  const configRows = configResult.data as Array<{
+    brand_name?: string;
+    welcome_message?: string;
+  }> | null;
+  const widgetConfig = configRows && configRows.length > 0 ? configRows[0] : null;
+
+  const aiContext = widgetConfig
+    ? {
+        brandName: widgetConfig.brand_name || null,
+        welcomeMessage: widgetConfig.welcome_message || null,
+      }
+    : undefined;
+
+  // 2. Generate Gemini AI Response with workspace context
+  const botReplyText = await generateSupportResponse(historyItems, aiContext);
 
   // 3. Persist Bot Message as sender_type = 'bot'
   let botMessageRecord: {

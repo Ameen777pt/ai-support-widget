@@ -1,8 +1,41 @@
 import { GoogleGenAI } from "@google/genai";
 
-const SYSTEM_INSTRUCTION = `You are a helpful, professional, and friendly customer support assistant.
+export interface WorkspaceAIContext {
+  brandName?: string | null;
+  welcomeMessage?: string | null;
+}
+
+export interface ConversationHistoryItem {
+  sender_type: string;
+  content: string;
+}
+
+/**
+ * Builds a dynamic system instruction incorporating workspace identity and boundaries.
+ * Falls back to generic assistant instructions if no brand name is provided.
+ */
+export function buildSystemInstruction(context?: WorkspaceAIContext): string {
+  const brandName = context?.brandName?.trim();
+  const welcomeMessage = context?.welcomeMessage?.trim();
+
+  if (!brandName) {
+    return `You are a helpful, professional, and friendly customer support assistant.
 Your goal is to assist users clearly, accurately, and concisely.
 If you do not know the answer or cannot perform a requested action, politely let the user know and advise them to reach out to the support team directly.`;
+  }
+
+  const welcomeContext = welcomeMessage
+    ? `The workspace greeting is: "${welcomeMessage}".\n`
+    : "";
+
+  return `You are a helpful, professional, and friendly customer support assistant for ${brandName}.
+${welcomeContext}Your goal is to assist users clearly, accurately, and concisely while representing ${brandName}.
+Guidelines:
+- Identify as the customer support assistant for ${brandName} when asked.
+- Answer user inquiries politely and professionally within the context of ${brandName}.
+- Do not invent specific account details, pricing, internal systems, or confidential policies that have not been provided.
+- If you do not know the answer or cannot perform a requested action, politely advise the user to reach out to the ${brandName} support team directly.`.trim();
+}
 
 /**
  * Creates or retrieves a GoogleGenAI instance.
@@ -16,18 +49,14 @@ export function getGeminiClient(): GoogleGenAI | null {
   return new GoogleGenAI({ apiKey });
 }
 
-export interface ConversationHistoryItem {
-  sender_type: string;
-  content: string;
-}
-
 /**
- * Generates an AI response from Gemini given conversation history.
+ * Generates an AI response from Gemini given conversation history and optional workspace context.
  * Uses gemini-3.6-flash on the free tier.
  * Handles rate limits, timeouts, and errors safely without exposing secrets.
  */
 export async function generateSupportResponse(
   history: ConversationHistoryItem[],
+  context?: WorkspaceAIContext,
 ): Promise<string | null> {
   const ai = getGeminiClient();
   if (!ai) {
@@ -61,11 +90,13 @@ export async function generateSupportResponse(
       return null;
     }
 
+    const systemInstruction = buildSystemInstruction(context);
+
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",
       contents: sanitizedContents,
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction,
       },
     });
 
@@ -79,3 +110,4 @@ export async function generateSupportResponse(
     return null;
   }
 }
+
