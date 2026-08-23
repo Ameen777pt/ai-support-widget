@@ -111,6 +111,22 @@ export function KnowledgeSection({
     return `${(bytes / 1024).toFixed(1)} KB`;
   };
 
+  const MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+
+  const formatDate = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+
+    const month = MONTH_NAMES[d.getUTCMonth()];
+    const day = d.getUTCDate();
+    const year = d.getUTCFullYear();
+
+    return `${month} ${day}, ${year}`;
+  };
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Section Header */}
@@ -387,23 +403,13 @@ export function KnowledgeSection({
                       <span>Size: {formatFileSize(doc.file_size_bytes)}</span>
                       <span>•</span>
                       <span>
-                        Created:{" "}
-                        {new Date(doc.created_at).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                        Created: {formatDate(doc.created_at)}
                       </span>
                       {doc.updated_at && doc.updated_at !== doc.created_at && (
                         <>
                           <span>•</span>
                           <span>
-                            Updated:{" "}
-                            {new Date(doc.updated_at).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
+                            Updated: {formatDate(doc.updated_at)}
                           </span>
                         </>
                       )}

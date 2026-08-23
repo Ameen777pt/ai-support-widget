@@ -3,6 +3,7 @@ import { requireWorkspace } from "@/lib/auth/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { WidgetSettingsForm } from "./widget-settings-form";
 import { KnowledgeSection, type KnowledgeDocumentItem } from "./knowledge-section";
+import { ConversationsInbox, type ConversationThreadItem } from "./conversations-inbox";
 
 interface WidgetSettingsRow {
   brand_name: string;
@@ -12,22 +13,59 @@ interface WidgetSettingsRow {
   position: string;
 }
 
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
 export default async function DashboardPage() {
   const { user, workspace, membership } = await requireWorkspace();
 
   const supabase = await createClient();
-  const [{ data: settingsData }, { data: documentsData }] = await Promise.all([
-    supabase
-      .from("widget_settings")
-      .select("brand_name, brand_color, welcome_message, logo_url, position")
-      .eq("workspace_id", workspace.id)
-      .single(),
-    supabase
-      .from("documents")
-      .select("id, title, content, source_type, status, file_size_bytes, created_at, updated_at")
-      .eq("workspace_id", workspace.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: settingsData }, { data: documentsData }, { data: conversationsData }] =
+    await Promise.all([
+      supabase
+        .from("widget_settings")
+        .select("brand_name, brand_color, welcome_message, logo_url, position")
+        .eq("workspace_id", workspace.id)
+        .single(),
+      supabase
+        .from("documents")
+        .select("id, title, content, source_type, status, file_size_bytes, created_at, updated_at")
+        .eq("workspace_id", workspace.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("conversations")
+        .select(`
+          id,
+          visitor_id,
+          customer_name,
+          customer_email,
+          status,
+          last_message_at,
+          created_at,
+          updated_at,
+          messages (
+            id,
+            conversation_id,
+            sender_type,
+            sender_id,
+            content,
+            tokens_prompt,
+            tokens_completion,
+            latency_ms,
+            created_at
+          )
+        `)
+        .eq("workspace_id", workspace.id)
+        .order("last_message_at", { ascending: false }),
+    ]);
 
   const settings: WidgetSettingsRow = settingsData || {
     brand_name: workspace.name,
@@ -38,6 +76,7 @@ export default async function DashboardPage() {
   };
 
   const documents: KnowledgeDocumentItem[] = (documentsData as KnowledgeDocumentItem[]) || [];
+  const conversations: ConversationThreadItem[] = (conversationsData as unknown as ConversationThreadItem[]) || [];
   const isReadOnly = membership.role === "member";
 
   return (
@@ -102,11 +141,7 @@ export default async function DashboardPage() {
               Workspace Created
             </span>
             <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {new Date(workspace.created_at).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
+              {formatDate(workspace.created_at)}
             </p>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Tenant database isolation active
@@ -114,17 +149,22 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Widget Settings & Configuration Form */}
-        <WidgetSettingsForm
-          initialSettings={settings}
-          isReadOnly={isReadOnly}
-          publicWidgetKey={workspace.public_widget_key}
+        {/* Conversations Inbox & Transcript Viewer */}
+        <ConversationsInbox
+          conversations={conversations}
         />
 
         {/* Workspace Knowledge Management Section */}
         <KnowledgeSection
           documents={documents}
           isReadOnly={isReadOnly}
+        />
+
+        {/* Widget Settings & Configuration Form */}
+        <WidgetSettingsForm
+          initialSettings={settings}
+          isReadOnly={isReadOnly}
+          publicWidgetKey={workspace.public_widget_key}
         />
       </div>
     </div>
