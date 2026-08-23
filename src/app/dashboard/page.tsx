@@ -2,6 +2,7 @@ import { signOutAction } from "@/app/actions/auth";
 import { requireWorkspace } from "@/lib/auth/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { WidgetSettingsForm } from "./widget-settings-form";
+import { KnowledgeSection, type KnowledgeDocumentItem } from "./knowledge-section";
 
 interface WidgetSettingsRow {
   brand_name: string;
@@ -15,11 +16,18 @@ export default async function DashboardPage() {
   const { user, workspace, membership } = await requireWorkspace();
 
   const supabase = await createClient();
-  const { data: settingsData } = await supabase
-    .from("widget_settings")
-    .select("brand_name, brand_color, welcome_message, logo_url, position")
-    .eq("workspace_id", workspace.id)
-    .single();
+  const [{ data: settingsData }, { data: documentsData }] = await Promise.all([
+    supabase
+      .from("widget_settings")
+      .select("brand_name, brand_color, welcome_message, logo_url, position")
+      .eq("workspace_id", workspace.id)
+      .single(),
+    supabase
+      .from("documents")
+      .select("id, title, content, source_type, status, file_size_bytes, created_at, updated_at")
+      .eq("workspace_id", workspace.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const settings: WidgetSettingsRow = settingsData || {
     brand_name: workspace.name,
@@ -29,6 +37,7 @@ export default async function DashboardPage() {
     position: "bottom-right",
   };
 
+  const documents: KnowledgeDocumentItem[] = (documentsData as KnowledgeDocumentItem[]) || [];
   const isReadOnly = membership.role === "member";
 
   return (
@@ -110,6 +119,12 @@ export default async function DashboardPage() {
           initialSettings={settings}
           isReadOnly={isReadOnly}
           publicWidgetKey={workspace.public_widget_key}
+        />
+
+        {/* Workspace Knowledge Management Section */}
+        <KnowledgeSection
+          documents={documents}
+          isReadOnly={isReadOnly}
         />
       </div>
     </div>
