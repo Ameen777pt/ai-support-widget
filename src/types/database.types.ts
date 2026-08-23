@@ -410,6 +410,18 @@ export interface Database {
           created_at: string;
         }[];
       };
+      search_workspace_knowledge: {
+        Args: {
+          p_public_widget_key: string;
+          p_query: string;
+          p_match_limit?: number;
+        };
+        Returns: {
+          document_id: string;
+          title: string;
+          content: string;
+        }[];
+      };
     };
     Enums: {
       workspace_role: WorkspaceRole;

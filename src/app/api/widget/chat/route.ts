@@ -110,8 +110,8 @@ export async function POST(request: NextRequest) {
 
   const createdMsg = msgData[0];
 
-  // 1. Concurrently retrieve existing conversation history and public widget config
-  const [historyResult, configResult] = await Promise.all([
+  // 1. Concurrently retrieve existing conversation history, public widget config, and relevant knowledge
+  const [historyResult, configResult, knowledgeResult] = await Promise.all([
     supabase.rpc("get_conversation_messages", {
       p_public_widget_key: widgetKey,
       p_visitor_id: visitorId,
@@ -119,6 +119,11 @@ export async function POST(request: NextRequest) {
     }),
     supabase.rpc("get_public_widget_config", {
       p_public_widget_key: widgetKey,
+    }),
+    supabase.rpc("search_workspace_knowledge", {
+      p_public_widget_key: widgetKey,
+      p_query: content,
+      p_match_limit: 3,
     }),
   ]);
 
@@ -136,14 +141,26 @@ export async function POST(request: NextRequest) {
   }> | null;
   const widgetConfig = configRows && configRows.length > 0 ? configRows[0] : null;
 
-  const aiContext = widgetConfig
-    ? {
-        brandName: widgetConfig.brand_name || null,
-        welcomeMessage: widgetConfig.welcome_message || null,
-      }
-    : undefined;
+  // Extract retrieved knowledge snippets safely (only title and content, max 3)
+  const rawKnowledge = (knowledgeResult.data as Array<{
+    document_id: string;
+    title: string;
+    content: string;
+  }>) || [];
+  const knowledgeSnippets = rawKnowledge
+    .filter((k) => k.title && k.content && k.content.trim().length > 0)
+    .map((k) => ({
+      title: k.title.trim(),
+      content: k.content.trim(),
+    }));
 
-  // 2. Generate Gemini AI Response with workspace context
+  const aiContext = {
+    brandName: widgetConfig?.brand_name || null,
+    welcomeMessage: widgetConfig?.welcome_message || null,
+    knowledgeSnippets: knowledgeSnippets.length > 0 ? knowledgeSnippets : null,
+  };
+
+  // 2. Generate Gemini AI Response with workspace context and grounded knowledge
   const botReplyText = await generateSupportResponse(historyItems, aiContext);
 
   // 3. Persist Bot Message as sender_type = 'bot'
