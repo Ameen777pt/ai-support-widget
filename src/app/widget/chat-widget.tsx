@@ -19,44 +19,123 @@ interface Message {
   time: string;
 }
 
+interface ApiMessage {
+  id: string;
+  sender_type: "user" | "bot" | "agent";
+  content: string;
+  created_at: string;
+}
+
+const VISITOR_STORAGE_KEY = "ai_widget_visitor_id";
+const VISITOR_ID_REGEX = /^vis_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getOrCreateVisitorId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem(VISITOR_STORAGE_KEY);
+  if (!id || !VISITOR_ID_REGEX.test(id)) {
+    id = `vis_${crypto.randomUUID()}`;
+    localStorage.setItem(VISITOR_STORAGE_KEY, id);
+  }
+  return id;
+}
+
+function getStoredConversationId(widgetKey: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(`ai_widget_conv_${widgetKey}`);
+}
+
+function setStoredConversationId(widgetKey: string, convId: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(`ai_widget_conv_${widgetKey}`, convId);
+}
+
+function formatTime(dateStr?: string): string {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export function ChatWidget() {
   const searchParams = useSearchParams();
   const widgetKey = searchParams.get("key") || searchParams.get("public_widget_key");
 
   const [config, setConfig] = useState<WidgetConfig | null>(null);
+  const [visitorId, setVisitorId] = useState<string>(() =>
+    typeof window !== "undefined" ? getOrCreateVisitorId() : "",
+  );
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    widgetKey && typeof window !== "undefined" ? getStoredConversationId(widgetKey) : null,
+  );
   const [isLoading, setIsLoading] = useState(Boolean(widgetKey));
+  const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(
     widgetKey ? null : "No public widget key provided in the URL query (?key=pk_live_...).",
   );
+  const [chatError, setChatError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Fetch Config and existing Conversation History
   useEffect(() => {
     if (!widgetKey) return;
 
     let isMounted = true;
 
-    async function fetchConfig() {
+    async function initializeWidget() {
       try {
-        const res = await fetch(`/api/widget/config?key=${encodeURIComponent(widgetKey!)}`);
-        const data = await res.json();
+        const vid = getOrCreateVisitorId();
+        if (isMounted) setVisitorId(vid);
 
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to load widget configuration.");
+        // 1. Fetch public branding configuration
+        const configRes = await fetch(`/api/widget/config?key=${encodeURIComponent(widgetKey!)}`);
+        const configData = await configRes.json();
+
+        if (!configRes.ok) {
+          throw new Error(configData.error || "Failed to load widget configuration.");
+        }
+
+        if (!isMounted) return;
+        setConfig(configData);
+
+        const welcomeMsg: Message = {
+          id: "welcome-msg",
+          sender: "bot",
+          text: configData.welcome_message || "Hi! How can we help you today?",
+          time: formatTime(),
+        };
+
+        // 2. Check for previously stored active conversation
+        const storedConv = getStoredConversationId(widgetKey!);
+        if (storedConv) {
+          try {
+            const chatRes = await fetch(
+              `/api/widget/chat?key=${encodeURIComponent(widgetKey!)}&visitor_id=${encodeURIComponent(vid)}&conversation_id=${encodeURIComponent(storedConv)}`,
+            );
+
+            if (chatRes.ok) {
+              const chatData = await chatRes.json();
+              if (isMounted) {
+                setConversationId(storedConv);
+                const historyMsgs: Message[] = (chatData.messages || []).map((m: ApiMessage) => ({
+                  id: m.id,
+                  sender: m.sender_type === "user" ? ("user" as const) : ("bot" as const),
+                  text: m.content,
+                  time: formatTime(m.created_at),
+                }));
+
+                setMessages([welcomeMsg, ...historyMsgs]);
+                setIsLoading(false);
+                return;
+              }
+            }
+          } catch {
+            // Ignore history fetch errors and fall back to initial welcome message
+          }
         }
 
         if (isMounted) {
-          setConfig(data);
-          setMessages([
-            {
-              id: "welcome-msg",
-              sender: "bot",
-              text: data.welcome_message || "Hi! How can we help you today?",
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            },
-          ]);
+          setMessages([welcomeMsg]);
           setIsLoading(false);
         }
       } catch (err: unknown) {
@@ -67,7 +146,7 @@ export function ChatWidget() {
       }
     }
 
-    fetchConfig();
+    initializeWidget();
 
     return () => {
       isMounted = false;
@@ -80,33 +159,69 @@ export function ChatWidget() {
     }
   }, [messages, isOpen]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || !widgetKey || isSending) return;
 
     const userText = inputMessage.trim();
-    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const vid = visitorId || getOrCreateVisitorId();
 
-    const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      sender: "user",
-      text: userText,
-      time: now,
-    };
+    setIsSending(true);
+    setChatError(null);
 
-    setMessages((prev) => [...prev, userMsg]);
-    setInputMessage("");
+    try {
+      const res = await fetch("/api/widget/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          key: widgetKey,
+          visitor_id: vid,
+          conversation_id: conversationId || undefined,
+          content: userText,
+        }),
+      });
 
-    // Temporary placeholder response until Day 4 AI integration
-    setTimeout(() => {
-      const placeholderBotMsg: Message = {
-        id: `bot-${Date.now()}`,
-        sender: "bot",
-        text: "Thanks for reaching out! Real-time AI support responses will be active in Day 4.",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send message.");
+      }
+
+      // Update active conversation ID and store in localStorage
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
+        setStoredConversationId(widgetKey, data.conversation_id);
+      }
+
+      // Append verified user message
+      const createdMsg: Message = {
+        id: data.message?.id || `user-${Date.now()}`,
+        sender: "user",
+        text: data.message?.content || userText,
+        time: formatTime(data.message?.created_at),
       };
-      setMessages((prev) => [...prev, placeholderBotMsg]);
-    }, 600);
+
+      const newMessages: Message[] = [createdMsg];
+
+      // Append bot reply if present in the response
+      if (data.reply?.content) {
+        newMessages.push({
+          id: data.reply.id || `bot-${Date.now()}`,
+          sender: "bot",
+          text: data.reply.content,
+          time: formatTime(data.reply.created_at),
+        });
+      }
+
+      setMessages((prev) => [...prev, ...newMessages]);
+      setInputMessage("");
+    } catch (err: unknown) {
+      setChatError(err instanceof Error ? err.message : "Failed to send message.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   if (isLoading) {
@@ -231,6 +346,13 @@ export function ChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Chat Error Notice */}
+          {chatError && (
+            <div className="border-t border-red-200 bg-red-50 px-3 py-1.5 text-center text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300">
+              {chatError}
+            </div>
+          )}
+
           {/* Input Bar */}
           <form
             onSubmit={handleSendMessage}
@@ -241,22 +363,27 @@ export function ChatWidget() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-400 dark:focus:ring-zinc-400"
+              disabled={isSending}
+              className="flex-1 rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:focus:border-zinc-400 dark:focus:ring-zinc-400"
             />
             <button
               type="submit"
-              disabled={!inputMessage.trim()}
-              style={{ backgroundColor: inputMessage.trim() ? brandColor : undefined }}
+              disabled={!inputMessage.trim() || isSending}
+              style={{ backgroundColor: inputMessage.trim() && !isSending ? brandColor : undefined }}
               aria-label="Send message"
               className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
-                inputMessage.trim()
+                inputMessage.trim() && !isSending
                   ? "text-white shadow-xs hover:opacity-90 active:scale-95"
                   : "bg-zinc-100 text-zinc-400 cursor-not-allowed dark:bg-zinc-800 dark:text-zinc-600"
               }`}
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
+              {isSending ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></div>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              )}
             </button>
           </form>
         </div>

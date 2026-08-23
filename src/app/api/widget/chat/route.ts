@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { generateSupportResponse } from "@/lib/ai/gemini";
 import { NextResponse, type NextRequest } from "next/server";
 
 const VISITOR_ID_REGEX = /^vis_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,6 +110,97 @@ export async function POST(request: NextRequest) {
 
   const createdMsg = msgData[0];
 
+  // 1. Retrieve existing conversation history (including the newly created visitor message)
+  const { data: historyMessages } = await supabase.rpc(
+    "get_conversation_messages",
+    {
+      p_public_widget_key: widgetKey,
+      p_visitor_id: visitorId,
+      p_conversation_id: conversationId,
+    },
+  );
+
+  const rawHistory: Array<{ sender_type: string; content: string }> =
+    (historyMessages as unknown as Array<{ sender_type: string; content: string }>) || [];
+
+  const historyItems = rawHistory.length > 0
+    ? rawHistory
+    : [{ sender_type: "user", content }];
+
+  // 2. Generate Gemini AI Response
+  const botReplyText = await generateSupportResponse(historyItems);
+
+  // 3. Persist Bot Message as sender_type = 'bot'
+  let botMessageRecord: {
+    id: string;
+    sender_type: string;
+    content: string;
+    created_at: string;
+  } | null = null;
+
+  if (botReplyText && conversationId) {
+    const activeConversationId: string = conversationId;
+    const adminClient = createAdminClient();
+    if (adminClient) {
+      try {
+        const { data: convRecord } = await adminClient
+          .from("conversations")
+          .select("workspace_id")
+          .eq("id", activeConversationId)
+          .maybeSingle();
+
+        const typedConv = convRecord as { workspace_id: string } | null;
+        if (typedConv?.workspace_id) {
+          const { data: savedMsg, error: insertErr } = await adminClient
+            .from("messages")
+            .insert({
+              workspace_id: typedConv.workspace_id,
+              conversation_id: activeConversationId,
+              sender_type: "bot",
+              content: botReplyText,
+            })
+            .select("id, sender_type, content, created_at")
+            .maybeSingle();
+
+          if (!insertErr && savedMsg) {
+            await adminClient
+              .from("conversations")
+              .update({ last_message_at: new Date().toISOString() })
+              .eq("id", activeConversationId);
+
+            const typedMsg = savedMsg as {
+              id: string;
+              sender_type: string;
+              content: string;
+              created_at: string;
+            };
+
+            botMessageRecord = {
+              id: typedMsg.id,
+              sender_type: typedMsg.sender_type,
+              content: typedMsg.content,
+              created_at: typedMsg.created_at,
+            };
+          }
+        }
+      } catch (dbErr) {
+        console.error(
+          "Failed to persist bot message:",
+          dbErr instanceof Error ? dbErr.message : "DB error",
+        );
+      }
+    }
+
+    if (!botMessageRecord) {
+      botMessageRecord = {
+        id: crypto.randomUUID(),
+        sender_type: "bot",
+        content: botReplyText,
+        created_at: new Date().toISOString(),
+      };
+    }
+  }
+
   return NextResponse.json(
     {
       conversation_id: conversationId,
@@ -117,6 +210,14 @@ export async function POST(request: NextRequest) {
         content: createdMsg.content,
         created_at: createdMsg.created_at,
       },
+      reply: botMessageRecord
+        ? {
+            id: botMessageRecord.id,
+            sender_type: botMessageRecord.sender_type,
+            content: botMessageRecord.content,
+            created_at: botMessageRecord.created_at,
+          }
+        : null,
     },
     { status: 201 },
   );
