@@ -74,6 +74,7 @@ export interface Database {
           id: string;
           workspace_id: string;
           title: string;
+          content: string;
           source_type: DocumentSourceType;
           source_url: string | null;
           file_path: string | null;
@@ -91,6 +92,7 @@ export interface Database {
           id?: string;
           workspace_id: string;
           title: string;
+          content: string;
           source_type: DocumentSourceType;
           source_url?: string | null;
           file_path?: string | null;
@@ -108,6 +110,7 @@ export interface Database {
           id?: string;
           workspace_id?: string;
           title?: string;
+          content?: string;
           source_type?: DocumentSourceType;
           source_url?: string | null;
           file_path?: string | null;
