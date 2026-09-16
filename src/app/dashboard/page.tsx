@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { WidgetSettingsForm } from "./widget-settings-form";
 import { KnowledgeSection, type KnowledgeDocumentItem } from "./knowledge-section";
 import { ConversationsInbox, type ConversationThreadItem } from "./conversations-inbox";
+import { UnansweredQuestionsSection, type UnansweredQuestionItem } from "./unanswered-questions";
 
 interface WidgetSettingsRow {
   brand_name: string;
@@ -11,6 +12,8 @@ interface WidgetSettingsRow {
   welcome_message: string;
   logo_url: string | null;
   position: string;
+  launcher_text: string;
+  suggested_questions: string[];
 }
 
 const MONTH_NAMES = [
@@ -28,44 +31,84 @@ export default async function DashboardPage() {
   const { user, workspace, membership } = await requireWorkspace();
 
   const supabase = await createClient();
-  const [{ data: settingsData }, { data: documentsData }, { data: conversationsData }] =
-    await Promise.all([
-      supabase
-        .from("widget_settings")
-        .select("brand_name, brand_color, welcome_message, logo_url, position")
-        .eq("workspace_id", workspace.id)
-        .single(),
-      supabase
-        .from("documents")
-        .select("id, title, content, source_type, status, file_size_bytes, created_at, updated_at")
-        .eq("workspace_id", workspace.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("conversations")
-        .select(`
+  const [
+    { data: settingsData },
+    { data: documentsData },
+    { data: conversationsData },
+    { data: unansweredData },
+  ] = await Promise.all([
+    supabase
+      .from("widget_settings")
+      .select("brand_name, brand_color, welcome_message, logo_url, position, launcher_text, suggested_questions")
+      .eq("workspace_id", workspace.id)
+      .single(),
+    supabase
+      .from("documents")
+      .select("id, title, content, source_type, status, file_size_bytes, created_at, updated_at")
+      .eq("workspace_id", workspace.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("conversations")
+      .select(`
+        id,
+        visitor_id,
+        customer_name,
+        customer_email,
+        status,
+        last_message_at,
+        created_at,
+        updated_at,
+        messages (
           id,
-          visitor_id,
-          customer_name,
-          customer_email,
+          conversation_id,
+          sender_type,
+          sender_id,
+          content,
+          tokens_prompt,
+          tokens_completion,
+          latency_ms,
+          created_at
+        ),
+        escalations (
+          id,
+          reason,
           status,
-          last_message_at,
+          assigned_to,
+          customer_email,
+          notes,
+          resolved_at,
           created_at,
-          updated_at,
-          messages (
-            id,
-            conversation_id,
-            sender_type,
-            sender_id,
-            content,
-            tokens_prompt,
-            tokens_completion,
-            latency_ms,
-            created_at
-          )
-        `)
-        .eq("workspace_id", workspace.id)
-        .order("last_message_at", { ascending: false }),
-    ]);
+          updated_at
+        )
+      `)
+      .eq("workspace_id", workspace.id)
+      .order("last_message_at", { ascending: false }),
+    supabase
+      .from("unanswered_questions")
+      .select(`
+        id,
+        workspace_id,
+        question_text,
+        normalized_query,
+        occurrence_count,
+        sample_conversation_id,
+        status,
+        resolved_by_document_id,
+        resolved_by,
+        resolved_at,
+        first_seen_at,
+        last_seen_at,
+        created_at,
+        updated_at,
+        resolved_document:documents!unanswered_questions_resolved_by_document_id_fkey (
+          id,
+          title
+        )
+      `)
+      .eq("workspace_id", workspace.id)
+      .order("occurrence_count", { ascending: false })
+      .order("last_seen_at", { ascending: false }),
+  ]);
 
   const settings: WidgetSettingsRow = settingsData || {
     brand_name: workspace.name,
@@ -73,10 +116,13 @@ export default async function DashboardPage() {
     welcome_message: "Hi! How can we help you today?",
     logo_url: null,
     position: "bottom-right",
+    launcher_text: "",
+    suggested_questions: [],
   };
 
   const documents: KnowledgeDocumentItem[] = (documentsData as KnowledgeDocumentItem[]) || [];
   const conversations: ConversationThreadItem[] = (conversationsData as unknown as ConversationThreadItem[]) || [];
+  const unansweredQuestions: UnansweredQuestionItem[] = (unansweredData as unknown as UnansweredQuestionItem[]) || [];
   const isReadOnly = membership.role === "member";
 
   return (
@@ -149,10 +195,20 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Conversations Inbox & Transcript Viewer */}
-        <ConversationsInbox
-          conversations={conversations}
+        {/* Unanswered Questions & Knowledge Gaps Section */}
+        <UnansweredQuestionsSection
+          questions={unansweredQuestions}
+          documents={documents}
+          isReadOnly={isReadOnly}
         />
+
+        {/* Conversations Inbox & Transcript Viewer */}
+        <div id="conversations-inbox">
+          <ConversationsInbox
+            conversations={conversations}
+            currentUserId={user.id}
+          />
+        </div>
 
         {/* Workspace Knowledge Management Section */}
         <KnowledgeSection
@@ -170,3 +226,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+

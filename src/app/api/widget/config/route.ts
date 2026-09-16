@@ -42,5 +42,7 @@ export async function GET(request: NextRequest) {
     welcome_message: config.welcome_message,
     logo_url: config.logo_url,
     position: config.position,
+    launcher_text: config.launcher_text ?? "",
+    suggested_questions: config.suggested_questions ?? [],
   });
 }

@@ -13,6 +13,7 @@ export type ConversationStatus = 'active' | 'escalated' | 'resolved' | 'closed';
 export type MessageSenderType = 'user' | 'bot' | 'agent';
 export type EscalationReason = 'user_requested' | 'unresolved_query' | 'negative_sentiment' | 'manual';
 export type EscalationStatus = 'pending' | 'assigned' | 'resolved' | 'dismissed';
+export type UnansweredQuestionStatus = 'open' | 'resolved' | 'ignored';
 
 export interface Database {
   public: {
@@ -169,6 +170,8 @@ export interface Database {
           welcome_message: string;
           logo_url: string | null;
           position: string;
+          launcher_text: string;
+          suggested_questions: string[];
           allowed_domains: string[];
           created_at: string;
           updated_at: string;
@@ -181,6 +184,8 @@ export interface Database {
           welcome_message?: string;
           logo_url?: string | null;
           position?: string;
+          launcher_text?: string;
+          suggested_questions?: string[];
           allowed_domains?: string[];
           created_at?: string;
           updated_at?: string;
@@ -193,6 +198,8 @@ export interface Database {
           welcome_message?: string;
           logo_url?: string | null;
           position?: string;
+          launcher_text?: string;
+          suggested_questions?: string[];
           allowed_domains?: string[];
           created_at?: string;
           updated_at?: string;
@@ -318,6 +325,56 @@ export interface Database {
           updated_at?: string;
         };
       };
+      unanswered_questions: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          question_text: string;
+          normalized_query: string;
+          occurrence_count: number;
+          sample_conversation_id: string | null;
+          status: UnansweredQuestionStatus;
+          resolved_by_document_id: string | null;
+          resolved_by: string | null;
+          resolved_at: string | null;
+          first_seen_at: string;
+          last_seen_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          question_text: string;
+          normalized_query: string;
+          occurrence_count?: number;
+          sample_conversation_id?: string | null;
+          status?: UnansweredQuestionStatus;
+          resolved_by_document_id?: string | null;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          question_text?: string;
+          normalized_query?: string;
+          occurrence_count?: number;
+          sample_conversation_id?: string | null;
+          status?: UnansweredQuestionStatus;
+          resolved_by_document_id?: string | null;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -369,6 +426,8 @@ export interface Database {
           welcome_message: string;
           logo_url: string | null;
           position: string;
+          launcher_text: string;
+          suggested_questions: string[];
         }[];
       };
       create_or_get_widget_conversation: {
@@ -422,6 +481,28 @@ export interface Database {
           content: string;
         }[];
       };
+      claim_escalated_conversation: {
+        Args: {
+          p_conversation_id: string;
+        };
+        Returns: {
+          success: boolean;
+          assigned_to: string | null;
+          message: string;
+        }[];
+      };
+      publish_knowledge_draft_and_resolve: {
+        Args: {
+          p_question_id: string;
+          p_title: string;
+          p_content: string;
+        };
+        Returns: {
+          success: boolean;
+          document_id: string | null;
+          error_message: string | null;
+        }[];
+      };
     };
     Enums: {
       workspace_role: WorkspaceRole;
@@ -431,6 +512,7 @@ export interface Database {
       message_sender_type: MessageSenderType;
       escalation_reason: EscalationReason;
       escalation_status: EscalationStatus;
+      unanswered_question_status: UnansweredQuestionStatus;
     };
   };
 }

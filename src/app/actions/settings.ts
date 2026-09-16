@@ -62,16 +62,107 @@ export async function updateWidgetSettingsAction(
     }
   }
 
+  // Validate Launcher Text if provided
+  let launcherText = "";
+  const hasLauncherText = formData.has("launcher_text");
+  if (hasLauncherText) {
+    const rawLauncherText = (formData.get("launcher_text") as string | null) ?? "";
+    launcherText = rawLauncherText.replace(/[\x00-\x1F\x7F]/g, "").trim();
+    if (launcherText.length > 30) {
+      return { error: "Launcher text must be at most 30 characters." };
+    }
+  }
+
+  // Validate Suggested Questions if provided
+  const suggestedQuestions: string[] = [];
+  const hasSuggestedQuestions =
+    formData.has("suggested_questions") || formData.has("suggested_questions[]");
+
+  if (hasSuggestedQuestions) {
+    const rawEntries = [
+      ...formData.getAll("suggested_questions"),
+      ...formData.getAll("suggested_questions[]"),
+    ];
+
+    const candidates: string[] = [];
+    for (const entry of rawEntries) {
+      if (typeof entry !== "string") continue;
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+
+      // Support stringified JSON array format e.g. '["Q1", "Q2"]'
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              if (typeof item === "string") {
+                candidates.push(item);
+              }
+            }
+            continue;
+          }
+        } catch {
+          // Fall back to literal string
+        }
+      }
+
+      // Support newline-separated entries
+      if (trimmed.includes("\n")) {
+        for (const line of trimmed.split("\n")) {
+          if (line.trim().length > 0) {
+            candidates.push(line);
+          }
+        }
+        continue;
+      }
+
+      candidates.push(trimmed);
+    }
+
+    if (candidates.length > 4) {
+      return { error: "You can specify a maximum of 4 suggested questions." };
+    }
+
+    for (const rawQ of candidates) {
+      const cleaned = rawQ.replace(/[\x00-\x1F\x7F]/g, "").trim();
+      if (cleaned.length < 2 || cleaned.length > 100) {
+        return {
+          error: "Each suggested question must be between 2 and 100 characters.",
+        };
+      }
+      suggestedQuestions.push(cleaned);
+    }
+  }
+
+  const updatePayload: {
+    brand_name: string;
+    brand_color: string;
+    welcome_message: string;
+    logo_url: string | null;
+    position: string;
+    launcher_text?: string;
+    suggested_questions?: string[];
+  } = {
+    brand_name: brandName,
+    brand_color: brandColor,
+    welcome_message: welcomeMessage,
+    logo_url: logoUrl,
+    position,
+  };
+
+  if (hasLauncherText) {
+    updatePayload.launcher_text = launcherText;
+  }
+
+  if (hasSuggestedQuestions) {
+    updatePayload.suggested_questions = suggestedQuestions;
+  }
+
   const supabase = await createClient();
   const { error: updateError } = await supabase
     .from("widget_settings")
-    .update({
-      brand_name: brandName,
-      brand_color: brandColor,
-      welcome_message: welcomeMessage,
-      logo_url: logoUrl,
-      position,
-    })
+    .update(updatePayload)
     .eq("workspace_id", workspace.id);
 
   if (updateError) {
