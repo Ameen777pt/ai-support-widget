@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import Link from "next/link";
 import {
   createKnowledgeDocAction,
   updateKnowledgeDocAction,
@@ -32,16 +33,51 @@ export function KnowledgeSection({
   const [editingDoc, setEditingDoc] = useState<KnowledgeDocumentItem | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form inputs
   const [titleInput, setTitleInput] = useState("");
   const [contentInput, setContentInput] = useState("");
 
+  // Refs for auto-scroll and focus
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const formContainerRef = useRef<HTMLDivElement>(null);
+
   // Action states
   const [feedback, setFeedback] = useState<KnowledgeActionState | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Scroll form into view if outside viewport and focus title input
+  useEffect(() => {
+    if (activeMode !== "idle") {
+      if (formContainerRef.current) {
+        const rect = formContainerRef.current.getBoundingClientRect();
+        const isOutsideViewport = rect.top < 0 || rect.bottom > window.innerHeight;
+        if (isOutsideViewport) {
+          formContainerRef.current.scrollIntoView({ block: "nearest" });
+        }
+      }
+      titleInputRef.current?.focus();
+    }
+  }, [activeMode, editingDoc?.id]);
+
+  const isFormDirty = (): boolean => {
+    if (activeMode === "create") {
+      return titleInput.trim().length > 0 || contentInput.trim().length > 0;
+    }
+    if (activeMode === "edit" && editingDoc) {
+      return titleInput !== editingDoc.title || contentInput !== editingDoc.content;
+    }
+    return false;
+  };
+
   const handleOpenCreate = () => {
+    if (typeof window !== "undefined" && isFormDirty()) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Are you sure you want to discard them?",
+      );
+      if (!confirmed) return;
+    }
     setFeedback(null);
     setEditingDoc(null);
     setTitleInput("");
@@ -50,6 +86,17 @@ export function KnowledgeSection({
   };
 
   const handleOpenEdit = (doc: KnowledgeDocumentItem) => {
+    if (activeMode === "edit" && editingDoc?.id === doc.id) {
+      return;
+    }
+
+    if (typeof window !== "undefined" && isFormDirty()) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Are you sure you want to discard them and edit this document?",
+      );
+      if (!confirmed) return;
+    }
+
     setFeedback(null);
     setEditingDoc(doc);
     setTitleInput(doc.title);
@@ -58,6 +105,12 @@ export function KnowledgeSection({
   };
 
   const handleCancelForm = () => {
+    if (typeof window !== "undefined" && isFormDirty()) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Are you sure you want to discard them?",
+      );
+      if (!confirmed) return;
+    }
     setActiveMode("idle");
     setEditingDoc(null);
     setTitleInput("");
@@ -127,6 +180,45 @@ export function KnowledgeSection({
     return `${month} ${day}, ${year}`;
   };
 
+  const formatStatus = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "ready":
+        return "Published";
+      case "draft":
+        return "Draft";
+      case "archived":
+        return "Archived";
+      default:
+        return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  };
+
+  const formatSourceType = (sourceType: string) => {
+    switch (sourceType.toLowerCase()) {
+      case "raw_text":
+        return "Manual Entry";
+      case "ai_draft":
+        return "AI Generated";
+      case "file":
+      case "file_upload":
+        return "File Upload";
+      case "url":
+      case "scraped_url":
+        return "Imported URL";
+      default:
+        return sourceType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  };
+
+  const filteredDocuments = documents.filter((doc) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      doc.title.toLowerCase().includes(query) ||
+      doc.content.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Section Header */}
@@ -137,12 +229,22 @@ export function KnowledgeSection({
               Workspace Knowledge Base
             </h2>
             <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-              {documents.length} {documents.length === 1 ? "entry" : "entries"}
+              {searchQuery.trim()
+                ? `${filteredDocuments.length} of ${documents.length}`
+                : `${documents.length} ${documents.length === 1 ? "entry" : "entries"}`}
             </span>
           </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Provide FAQs, return policies, product specifications, and documentation for your workspace.
           </p>
+          <div className="mt-2">
+            <Link
+              href="/dashboard?view=gaps"
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              <span>Looking for customer questions to answer? View Knowledge Gaps &rarr;</span>
+            </Link>
+          </div>
         </div>
 
         {!isReadOnly && activeMode === "idle" && (
@@ -181,7 +283,10 @@ export function KnowledgeSection({
 
       {/* Inline Create / Edit Form */}
       {activeMode !== "idle" && (
-        <div className="mt-6 rounded-2xl border border-zinc-300 bg-zinc-50/50 p-5 dark:border-zinc-700 dark:bg-zinc-800/40">
+        <div
+          ref={formContainerRef}
+          className="mt-6 rounded-2xl border border-zinc-300 bg-zinc-50/50 p-5 dark:border-zinc-700 dark:bg-zinc-800/40"
+        >
           <div className="flex items-center justify-between border-b border-zinc-200 pb-3 dark:border-zinc-700">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {activeMode === "create" ? "New Knowledge Entry" : `Edit Knowledge Entry: ${editingDoc?.title}`}
@@ -189,7 +294,7 @@ export function KnowledgeSection({
             <button
               type="button"
               onClick={handleCancelForm}
-              className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              className="inline-flex items-center justify-center min-h-[40px] px-2.5 sm:min-h-0 sm:px-0 text-xs font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               Cancel
             </button>
@@ -222,11 +327,12 @@ export function KnowledgeSection({
                 >
                   Document Title
                 </label>
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                <span id="knowledge_title_counter" className="text-xs text-zinc-500 dark:text-zinc-400">
                   {titleInput.length}/150
                 </span>
               </div>
               <input
+                ref={titleInputRef}
                 id="knowledge_title"
                 name="title"
                 type="text"
@@ -236,7 +342,8 @@ export function KnowledgeSection({
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 disabled={isPending}
-                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                aria-describedby="knowledge_title_counter"
+                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
                 placeholder="e.g. Return & Exchange Policy, Operating Hours, API Specs"
               />
             </div>
@@ -250,7 +357,7 @@ export function KnowledgeSection({
                 >
                   Knowledge Content
                 </label>
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                <span id="knowledge_content_counter" className="text-xs text-zinc-500 dark:text-zinc-400">
                   {contentInput.length}/20,000
                 </span>
               </div>
@@ -264,10 +371,11 @@ export function KnowledgeSection({
                 value={contentInput}
                 onChange={(e) => setContentInput(e.target.value)}
                 disabled={isPending}
-                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                aria-describedby="knowledge_content_hint knowledge_content_counter"
+                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
                 placeholder="Enter clear, comprehensive knowledge text or FAQ questions and answers here..."
               />
-              <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+              <p id="knowledge_content_hint" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                 Minimum 10 characters. Plain text or markdown formatted content.
               </p>
             </div>
@@ -292,7 +400,7 @@ export function KnowledgeSection({
                 type="button"
                 onClick={handleCancelForm}
                 disabled={isPending}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px]"
               >
                 Cancel
               </button>
@@ -303,11 +411,16 @@ export function KnowledgeSection({
 
       {/* Delete Confirmation Banner */}
       {deletingDocId && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50/70 p-5 dark:border-red-900/60 dark:bg-red-950/40">
-          <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">
+        <div
+          role="alertdialog"
+          aria-labelledby="delete_confirm_title"
+          aria-describedby="delete_confirm_desc"
+          className="mt-6 rounded-2xl border border-red-200 bg-red-50/70 p-5 dark:border-red-900/60 dark:bg-red-950/40"
+        >
+          <h4 id="delete_confirm_title" className="text-sm font-semibold text-red-900 dark:text-red-200">
             Confirm Document Deletion
           </h4>
-          <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+          <p id="delete_confirm_desc" className="mt-1 text-xs text-red-700 dark:text-red-300">
             Are you sure you want to delete this knowledge entry? This action cannot be undone.
           </p>
 
@@ -320,12 +433,12 @@ export function KnowledgeSection({
             </div>
           )}
 
-          <form onSubmit={handleDeleteSubmit} className="mt-4 flex items-center gap-3">
+          <form onSubmit={handleDeleteSubmit} className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
             <input type="hidden" name="document_id" value={deletingDocId} />
             <button
               type="submit"
               disabled={isPending}
-              className="rounded-xl bg-red-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-red-700 disabled:opacity-60"
+              className="inline-flex items-center justify-center rounded-xl bg-red-600 px-4 py-2 sm:py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-red-700 disabled:opacity-60 min-h-[40px] sm:min-h-0"
             >
               {isPending ? "Deleting..." : "Yes, Delete Document"}
             </button>
@@ -333,11 +446,47 @@ export function KnowledgeSection({
               type="button"
               onClick={() => setDeletingDocId(null)}
               disabled={isPending}
-              className="rounded-xl border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-2 sm:px-3 sm:py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px] sm:min-h-0"
             >
               Cancel
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Search Bar */}
+      {documents.length > 0 && (
+        <div className="relative mt-6">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-400 dark:text-zinc-500">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search knowledge entries by title or content..."
+            aria-label="Search knowledge entries"
+            className="w-full rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-9 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 min-h-[38px]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search query"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 min-h-[38px]"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 
@@ -364,6 +513,14 @@ export function KnowledgeSection({
             <p className="mt-1 max-w-sm text-xs text-zinc-500 dark:text-zinc-400">
               Add FAQs, company policies, or product information so your workspace is prepared to deliver accurate support.
             </p>
+            <div className="mt-2.5">
+              <Link
+                href="/dashboard?view=gaps"
+                className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                <span>Looking for customer questions to answer? View Knowledge Gaps &rarr;</span>
+              </Link>
+            </div>
             {!isReadOnly && (
               <button
                 type="button"
@@ -377,8 +534,37 @@ export function KnowledgeSection({
               </button>
             )}
           </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 p-8 text-center dark:border-zinc-800">
+            <svg
+              className="h-8 w-8 text-zinc-400 dark:text-zinc-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <h4 className="mt-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+              No matching knowledge entries
+            </h4>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              No entries found matching &ldquo;{searchQuery}&rdquo;. Try another search term.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-3 inline-flex items-center rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[38px] sm:min-h-0"
+            >
+              Clear search
+            </button>
+          </div>
         ) : (
-          documents.map((doc) => {
+          filteredDocuments.map((doc) => {
             const isExpanded = expandedDocId === doc.id;
             return (
               <div
@@ -386,20 +572,20 @@ export function KnowledgeSection({
                 className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-xs transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/90 dark:hover:border-zinc-700"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 break-words [overflow-wrap:anywhere]">
                         {doc.title}
                       </h4>
                       <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-600/20 ring-inset dark:bg-emerald-950/50 dark:text-emerald-300">
-                        {doc.status}
+                        {formatStatus(doc.status)}
                       </span>
                       <span className="inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                        {doc.source_type}
+                        {formatSourceType(doc.source_type)}
                       </span>
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
                       <span>Size: {formatFileSize(doc.file_size_bytes)}</span>
                       <span>•</span>
                       <span>
@@ -422,14 +608,14 @@ export function KnowledgeSection({
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(doc)}
-                        className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-2 sm:py-1 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[38px] sm:min-h-0"
+                        className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-2 sm:px-2.5 sm:py-1 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px] sm:min-h-0"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeletingDocId(doc.id)}
-                        className="inline-flex items-center rounded-lg border border-red-200 bg-white px-2.5 py-2 sm:py-1 text-xs font-medium text-red-600 shadow-2xs hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950/40 min-h-[38px] sm:min-h-0"
+                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-3 py-2 sm:px-2.5 sm:py-1 text-xs font-medium text-red-600 shadow-2xs hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950/40 min-h-[40px] sm:min-h-0"
                       >
                         Delete
                       </button>
@@ -438,8 +624,11 @@ export function KnowledgeSection({
                 </div>
 
                 {/* Content Preview */}
-                <div className="mt-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-                  <p className="whitespace-pre-wrap">
+                <div
+                  id={`doc-content-${doc.id}`}
+                  className="mt-3 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300 min-w-0"
+                >
+                  <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                     {isExpanded
                       ? doc.content
                       : doc.content.length > 220
@@ -450,7 +639,9 @@ export function KnowledgeSection({
                     <button
                       type="button"
                       onClick={() => setExpandedDocId(isExpanded ? null : doc.id)}
-                      className="mt-1 font-medium text-zinc-900 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-100 dark:hover:text-zinc-300"
+                      aria-expanded={isExpanded}
+                      aria-controls={`doc-content-${doc.id}`}
+                      className="mt-1 inline-block py-2 sm:py-0.5 font-medium text-zinc-900 underline underline-offset-2 hover:text-zinc-700 dark:text-zinc-100 dark:hover:text-zinc-300"
                     >
                       {isExpanded ? "Show less" : "Read full content"}
                     </button>
