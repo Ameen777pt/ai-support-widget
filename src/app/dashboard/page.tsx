@@ -5,6 +5,8 @@ import { WidgetSettingsForm } from "./widget-settings-form";
 import { KnowledgeSection, type KnowledgeDocumentItem } from "./knowledge-section";
 import { ConversationsInbox, type ConversationThreadItem } from "./conversations-inbox";
 import { UnansweredQuestionsSection, type UnansweredQuestionItem } from "./unanswered-questions";
+import { DashboardNav, type DashboardView } from "./dashboard-nav";
+import { OverviewSection } from "./overview-section";
 
 interface WidgetSettingsRow {
   brand_name: string;
@@ -16,19 +18,26 @@ interface WidgetSettingsRow {
   suggested_questions: string[];
 }
 
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  return `${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+interface DashboardPageProps {
+  searchParams?: Promise<{ view?: string; conversationId?: string }>;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage(props: DashboardPageProps) {
   const { user, workspace, membership } = await requireWorkspace();
+  const resolvedParams = props.searchParams ? await props.searchParams : {};
+
+  const validViews: DashboardView[] = ["overview", "inbox", "knowledge", "gaps", "widget"];
+  const rawView = resolvedParams?.view;
+  const activeView: DashboardView = (
+    typeof rawView === "string" && (validViews as string[]).includes(rawView)
+      ? rawView
+      : "overview"
+  ) as DashboardView;
+
+  const activeConversationId =
+    typeof resolvedParams?.conversationId === "string"
+      ? resolvedParams.conversationId
+      : undefined;
 
   const supabase = await createClient();
   const [
@@ -125,11 +134,14 @@ export default async function DashboardPage() {
   const unansweredQuestions: UnansweredQuestionItem[] = (unansweredData as unknown as UnansweredQuestionItem[]) || [];
   const isReadOnly = membership.role === "member";
 
+  const escalatedCount = conversations.filter((c) => c.status === "escalated").length;
+  const openGapsCount = unansweredQuestions.filter((q) => q.status === "open").length;
+
   return (
-    <div className="min-h-screen bg-zinc-50 p-6 dark:bg-zinc-950 sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-8">
-        {/* Top Navigation / Header */}
-        <div className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-h-screen bg-zinc-50 p-4 sm:p-6 lg:p-8 dark:bg-zinc-950">
+      <div className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
+        {/* Top Header */}
+        <header className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
@@ -147,83 +159,66 @@ export default async function DashboardPage() {
           <form action={signOutAction}>
             <button
               type="submit"
-              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px]"
             >
               Sign out
             </button>
           </form>
-        </div>
+        </header>
 
-        {/* Workspace Details Grid */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Workspace Identifier
-            </span>
-            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {workspace.slug}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Unique URL slug for this organization
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Public Widget Key
-            </span>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="rounded bg-zinc-100 px-2 py-1 font-mono text-xs font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-                {workspace.public_widget_key}
-              </code>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Client key for public widget resolution
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Workspace Created
-            </span>
-            <p className="mt-2 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {formatDate(workspace.created_at)}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Tenant database isolation active
-            </p>
-          </div>
-        </div>
-
-        {/* Unanswered Questions & Knowledge Gaps Section */}
-        <UnansweredQuestionsSection
-          questions={unansweredQuestions}
-          documents={documents}
-          isReadOnly={isReadOnly}
+        {/* Dashboard Navigation */}
+        <DashboardNav
+          activeView={activeView}
+          escalatedCount={escalatedCount}
+          openGapsCount={openGapsCount}
         />
 
-        {/* Conversations Inbox & Transcript Viewer */}
-        <div id="conversations-inbox">
-          <ConversationsInbox
+        {/* Active View Content */}
+        {activeView === "overview" && (
+          <OverviewSection
+            workspace={workspace}
+            membership={membership}
             conversations={conversations}
-            currentUserId={user.id}
+            documents={documents}
+            unansweredQuestions={unansweredQuestions}
+            settings={settings}
           />
-        </div>
+        )}
 
-        {/* Workspace Knowledge Management Section */}
-        <KnowledgeSection
-          documents={documents}
-          isReadOnly={isReadOnly}
-        />
+        {activeView === "inbox" && (
+          <div id="conversations-inbox">
+            <ConversationsInbox
+              key={activeConversationId || "inbox-default"}
+              conversations={conversations}
+              currentUserId={user.id}
+              initialConversationId={activeConversationId}
+            />
+          </div>
+        )}
 
-        {/* Widget Settings & Configuration Form */}
-        <WidgetSettingsForm
-          initialSettings={settings}
-          isReadOnly={isReadOnly}
-          publicWidgetKey={workspace.public_widget_key}
-        />
+        {activeView === "knowledge" && (
+          <KnowledgeSection
+            documents={documents}
+            isReadOnly={isReadOnly}
+          />
+        )}
+
+        {activeView === "gaps" && (
+          <UnansweredQuestionsSection
+            questions={unansweredQuestions}
+            documents={documents}
+            isReadOnly={isReadOnly}
+          />
+        )}
+
+        {activeView === "widget" && (
+          <WidgetSettingsForm
+            initialSettings={settings}
+            isReadOnly={isReadOnly}
+            publicWidgetKey={workspace.public_widget_key}
+          />
+        )}
       </div>
     </div>
   );
 }
-

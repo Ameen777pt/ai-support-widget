@@ -13,6 +13,7 @@ const testFiles = [
   { name: "Step 7.2: Widget Customization Server Action & Data Flow", file: "scripts/test-widget-customization-settings.mjs", useStripTypes: false },
   { name: "Step 7.3: Widget Customization UI & Live Preview", file: "scripts/test-widget-customization-ui.mjs", useStripTypes: false },
   { name: "Step 7.4: Public Widget Customization Integration", file: "scripts/test-widget-customization-public.mjs", useStripTypes: false },
+  { name: "Step 8.2: Dashboard Navigation & View Architecture", file: "scripts/test-dashboard-navigation.mjs", useStripTypes: false },
 ];
 
 let allPassed = true;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type { KnowledgeDocumentItem } from "./knowledge-section";
 import {
   resolveUnansweredQuestionAction,
@@ -66,6 +67,7 @@ export function UnansweredQuestionsSection({
   isReadOnly,
   onSelectConversation,
 }: UnansweredQuestionsSectionProps) {
+  const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "resolved" | "ignored">("open");
   const [resolvingQuestion, setResolvingQuestion] = useState<UnansweredQuestionItem | null>(null);
   const [selectedDocId, setSelectedDocId] = useState<string>("");
@@ -163,10 +165,7 @@ export function UnansweredQuestionsSection({
     if (onSelectConversation) {
       onSelectConversation(conversationId);
     }
-    const inboxElement = document.getElementById("conversations-inbox");
-    if (inboxElement) {
-      inboxElement.scrollIntoView({ behavior: "smooth" });
-    }
+    router.push(`/dashboard?view=inbox&conversationId=${encodeURIComponent(conversationId)}`);
   };
 
   // 4. Draft Generation & Editor Handlers
@@ -334,7 +333,7 @@ export function UnansweredQuestionsSection({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -367,7 +366,7 @@ export function UnansweredQuestionsSection({
             <button
               key={tab.key}
               onClick={() => setFilterStatus(tab.key)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 text-xs font-medium transition-all ${
                 filterStatus === tab.key
                   ? "bg-white text-zinc-900 shadow-xs dark:bg-zinc-700 dark:text-zinc-100"
                   : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -375,7 +374,7 @@ export function UnansweredQuestionsSection({
             >
               <span>{tab.label}</span>
               <span
-                className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
                   filterStatus === tab.key
                     ? "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200"
                     : "bg-zinc-200/70 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
@@ -393,8 +392,10 @@ export function UnansweredQuestionsSection({
         <div className="mt-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300">
           <span>{actionError}</span>
           <button
+            type="button"
             onClick={() => setActionError(null)}
-            className="text-red-600 hover:text-red-800 dark:text-red-400"
+            aria-label="Dismiss error"
+            className="text-red-600 hover:text-red-800 dark:text-red-400 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 p-2 sm:p-0.5 inline-flex items-center justify-center"
           >
             ✕
           </button>
@@ -409,8 +410,10 @@ export function UnansweredQuestionsSection({
             <span>{publishSuccessMessage}</span>
           </div>
           <button
+            type="button"
             onClick={() => setPublishSuccessMessage(null)}
-            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400"
+            aria-label="Dismiss message"
+            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 p-2 sm:p-0.5 inline-flex items-center justify-center"
           >
             ✕
           </button>
@@ -510,13 +513,13 @@ export function UnansweredQuestionsSection({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   {/* View Sample Conversation */}
                   {q.sample_conversation_id && (
                     <button
                       onClick={() => handleViewConversation(q.sample_conversation_id!)}
                       title="Inspect sample visitor conversation"
-                      className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-2 sm:py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px] sm:min-h-0"
                     >
                       View Chat
                     </button>
@@ -530,7 +533,7 @@ export function UnansweredQuestionsSection({
                             type="button"
                             onClick={() => handleStartDraft(q)}
                             disabled={isPending || generatingQuestionId !== null}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-2xs hover:bg-indigo-700 active:scale-95 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 sm:py-1.5 text-xs font-medium text-white shadow-2xs hover:bg-indigo-700 active:scale-95 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600 min-h-[40px] sm:min-h-0"
                           >
                             {generatingQuestionId === q.id ? (
                               <>
@@ -560,7 +563,7 @@ export function UnansweredQuestionsSection({
                             type="button"
                             onClick={() => handleOpenResolveModal(q)}
                             disabled={isPending || generatingQuestionId !== null}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white shadow-2xs hover:bg-emerald-700 active:scale-95 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                            className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 sm:py-1.5 text-xs font-medium text-white shadow-2xs hover:bg-emerald-700 active:scale-95 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600 min-h-[40px] sm:min-h-0"
                           >
                             Resolve with Knowledge
                           </button>
@@ -569,7 +572,7 @@ export function UnansweredQuestionsSection({
                             onClick={() => handleIgnore(q.id)}
                             disabled={isPending || generatingQuestionId !== null}
                             title="Dismiss one-off or irrelevant query"
-                            className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-500 shadow-2xs hover:bg-zinc-50 hover:text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                            className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-2 sm:py-1.5 text-xs font-medium text-zinc-500 shadow-2xs hover:bg-zinc-50 hover:text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200 min-h-[40px] sm:min-h-0"
                           >
                             Ignore
                           </button>
@@ -580,7 +583,7 @@ export function UnansweredQuestionsSection({
                         <button
                           onClick={() => handleReopen(q.id)}
                           disabled={isPending}
-                          className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                          className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-3 py-2 sm:py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[40px] sm:min-h-0"
                         >
                           Reopen Gap
                         </button>
@@ -688,8 +691,9 @@ export function UnansweredQuestionsSection({
                   <button
                     type="button"
                     onClick={handleCloseDraftModal}
-                    className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                    className="rounded-lg p-2 sm:p-1 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                     title="Close draft editor"
+                    aria-label="Close draft editor"
                   >
                     ✕
                   </button>
@@ -938,8 +942,9 @@ export function UnansweredQuestionsSection({
                   <button
                     type="button"
                     onClick={handleCloseDraftModal}
-                    className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                    className="rounded-lg p-2 sm:p-1 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                     title="Close preview"
+                    aria-label="Close preview"
                   >
                     ✕
                   </button>

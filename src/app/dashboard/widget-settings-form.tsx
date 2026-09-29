@@ -80,7 +80,7 @@ export function WidgetSettingsForm({
   const safeBrandColor = brandColor.startsWith("#") ? brandColor : "#0F172A";
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -189,6 +189,7 @@ export function WidgetSettingsForm({
                   value={safeBrandColor}
                   onChange={(e) => setBrandColor(e.target.value)}
                   disabled={isReadOnly || isPending}
+                  aria-label="Choose brand color"
                   className="h-9 w-10 cursor-pointer rounded-lg border border-zinc-300 p-0.5 disabled:opacity-60 dark:border-zinc-700"
                 />
                 <input
@@ -352,7 +353,7 @@ export function WidgetSettingsForm({
                         onClick={() => handleRemoveQuestion(idx)}
                         disabled={isPending}
                         aria-label={`Remove question ${idx + 1}`}
-                        className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                        className="shrink-0 rounded p-2 sm:p-1 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -404,7 +405,7 @@ export function WidgetSettingsForm({
                         type="button"
                         onClick={handleAddQuestion}
                         disabled={isPending || newQuestion.trim().length < 2}
-                        className="rounded-xl bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white shadow-2xs hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                        className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3.5 py-2 min-h-[40px] sm:min-h-0 text-xs font-medium text-white shadow-2xs hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
                       >
                         Add
                       </button>
@@ -456,7 +457,7 @@ export function WidgetSettingsForm({
                 <button
                   type="button"
                   onClick={() => setIsPreviewOpen(true)}
-                  className={`rounded-md px-2 py-1 transition-colors ${
+                  className={`rounded-md px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[36px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
                     isPreviewOpen
                       ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -467,7 +468,7 @@ export function WidgetSettingsForm({
                 <button
                   type="button"
                   onClick={() => setIsPreviewOpen(false)}
-                  className={`rounded-md px-2 py-1 transition-colors ${
+                  className={`rounded-md px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[36px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
                     !isPreviewOpen
                       ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -528,7 +529,7 @@ export function WidgetSettingsForm({
                       type="button"
                       onClick={() => setIsPreviewOpen(false)}
                       aria-label="Close preview chat"
-                      className="rounded-lg p-1 text-white/80 hover:bg-white/10 hover:text-white"
+                      className="rounded-lg p-2 sm:p-1 min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 inline-flex items-center justify-center text-white/80 hover:bg-white/10 hover:text-white"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -547,8 +548,8 @@ export function WidgetSettingsForm({
                         <span>Just now</span>
                       </div>
 
-                      <div className="max-w-[90%] rounded-2xl rounded-tl-xs border border-zinc-200/80 bg-white p-2.5 text-xs leading-relaxed text-zinc-800 shadow-2xs dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
-                        <p className="whitespace-pre-wrap">
+                      <div className="max-w-[90%] rounded-2xl rounded-tl-xs border border-zinc-200/80 bg-white p-2.5 text-xs leading-relaxed text-zinc-800 shadow-2xs break-words [overflow-wrap:anywhere] dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
+                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                           {welcomeMessage.trim() || "Hi! How can we help you today?"}
                         </p>
                       </div>

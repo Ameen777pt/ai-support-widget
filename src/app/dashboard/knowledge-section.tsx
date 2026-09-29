@@ -128,7 +128,7 @@ export function KnowledgeSection({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       {/* Section Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -383,7 +383,7 @@ export function KnowledgeSection({
             return (
               <div
                 key={doc.id}
-                className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-xs transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/90 dark:hover:border-zinc-700"
+                className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-xs transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/90 dark:hover:border-zinc-700"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -422,14 +422,14 @@ export function KnowledgeSection({
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(doc)}
-                        className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        className="inline-flex items-center rounded-lg border border-zinc-200 bg-white px-2.5 py-2 sm:py-1 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 min-h-[38px] sm:min-h-0"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => setDeletingDocId(doc.id)}
-                        className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 shadow-2xs hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950/40"
+                        className="inline-flex items-center rounded-lg border border-red-200 bg-white px-2.5 py-2 sm:py-1 text-xs font-medium text-red-600 shadow-2xs hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:bg-zinc-800 dark:text-red-400 dark:hover:bg-red-950/40 min-h-[38px] sm:min-h-0"
                       >
                         Delete
                       </button>
