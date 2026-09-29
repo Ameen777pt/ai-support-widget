@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ConversationStatus, MessageSenderType } from "@/types/database.types";
 import {
   claimConversationAction,
@@ -84,6 +85,7 @@ export function ConversationsInbox({
   currentUserId,
   initialConversationId,
 }: ConversationsInboxProps) {
+  const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState<FilterTab>("all");
   const [selectedConvId, setSelectedConvId] = useState<string | null>(() => {
     if (initialConversationId && conversations.some((c) => c.id === initialConversationId)) {
@@ -395,6 +397,10 @@ export function ConversationsInbox({
                     setMobileShowDetail(true);
                     setActionError(null);
                     setActionNotice(null);
+                    router.replace(
+                      `/dashboard?view=inbox&conversationId=${encodeURIComponent(conv.id)}`,
+                      { scroll: false },
+                    );
                   }}
                   className={`w-full text-left rounded-2xl p-3 sm:p-4 transition-all border ${
                     isSelected

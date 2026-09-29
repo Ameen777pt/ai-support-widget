@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { KnowledgeDocumentItem } from "./knowledge-section";
 import {
   resolveUnansweredQuestionAction,
@@ -623,7 +624,19 @@ export function UnansweredQuestionsSection({
               </label>
               {documents.length === 0 ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/60 dark:text-amber-300">
-                  No knowledge documents found in this workspace. Please add a document to your Knowledge Base first.
+                  <p>
+                    No knowledge documents found in this workspace. Please add a document to your Knowledge Base first.
+                  </p>
+                  <div className="mt-2.5 pt-2 border-t border-amber-200/80 dark:border-amber-900/60">
+                    <Link
+                      href="/dashboard?view=knowledge"
+                      scroll={false}
+                      onClick={handleCloseResolveModal}
+                      className="inline-flex items-center gap-1 font-semibold text-amber-900 underline hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-100 min-h-[32px]"
+                    >
+                      Go to Knowledge Base &rarr;
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 <select
@@ -950,13 +963,13 @@ export function UnansweredQuestionsSection({
                   </button>
                 </div>
 
-                {/* Notice that no changes were made */}
+                {/* Publish Confirmation Notice */}
                 <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/80 p-3.5 text-xs text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/50 dark:text-blue-200">
                   <span className="font-semibold text-blue-950 dark:text-blue-100">
-                    Draft Validated &amp; Ready:
+                    Draft Validated &amp; Ready to Publish:
                   </span>
                   <p className="mt-0.5 text-blue-800 dark:text-blue-300 leading-relaxed">
-                    The document title and content have passed all validation rules. Note: Final database publishing and knowledge-gap resolution will occur in Step 6.4-C. No database changes have been made.
+                    Publishing will immediately create this knowledge document in your workspace and mark this knowledge gap as resolved. This action is permanent and updates your live knowledge base.
                   </p>
                 </div>
 
