@@ -14,6 +14,16 @@ interface WidgetSettingsData {
   suggested_questions?: string[];
 }
 
+interface WidgetSettingsSnapshot {
+  brandName: string;
+  brandColor: string;
+  welcomeMessage: string;
+  logoUrl: string;
+  position: string;
+  launcherText: string;
+  suggestedQuestions: string[];
+}
+
 interface WidgetSettingsFormProps {
   initialSettings: WidgetSettingsData;
   isReadOnly: boolean;
@@ -52,6 +62,90 @@ export function WidgetSettingsForm({
   // Live preview interactive state
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+
+  // Mobile/tablet view switcher state (below lg)
+  const [activeTab, setActiveTab] = useState<"settings" | "preview">("settings");
+
+  // Client-side snapshot of the last successfully saved settings
+  const [savedSnapshot, setSavedSnapshot] = useState<WidgetSettingsSnapshot>(() => ({
+    brandName: initialSettings.brand_name || "",
+    brandColor: initialSettings.brand_color || "#0F172A",
+    welcomeMessage: initialSettings.welcome_message || "",
+    logoUrl: initialSettings.logo_url || "",
+    position: initialSettings.position || "bottom-right",
+    launcherText: initialSettings.launcher_text || "",
+    suggestedQuestions: initialSettings.suggested_questions || [],
+  }));
+
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [dismissedFeedback, setDismissedFeedback] = useState(false);
+
+  // Sync snapshot during render when server action confirms success
+  const [prevActionState, setPrevActionState] = useState(state);
+  if (prevActionState !== state) {
+    setPrevActionState(state);
+    if (state.success) {
+      setSavedSnapshot({
+        brandName,
+        brandColor,
+        welcomeMessage,
+        logoUrl,
+        position,
+        launcherText,
+        suggestedQuestions,
+      });
+      setShowResetConfirm(false);
+      setDismissedFeedback(false);
+    } else if (state.error) {
+      setDismissedFeedback(false);
+    }
+  }
+
+  // Sync snapshot during render if initialSettings update from server revalidation
+  const [prevInitialSettings, setPrevInitialSettings] = useState(initialSettings);
+  if (prevInitialSettings !== initialSettings) {
+    setPrevInitialSettings(initialSettings);
+    setSavedSnapshot({
+      brandName: initialSettings.brand_name || "",
+      brandColor: initialSettings.brand_color || "#0F172A",
+      welcomeMessage: initialSettings.welcome_message || "",
+      logoUrl: initialSettings.logo_url || "",
+      position: initialSettings.position || "bottom-right",
+      launcherText: initialSettings.launcher_text || "",
+      suggestedQuestions: initialSettings.suggested_questions || [],
+    });
+  }
+
+  const areQuestionsEqual = (a: string[], b: string[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  };
+
+  const isFormDirty =
+    brandName !== savedSnapshot.brandName ||
+    brandColor !== savedSnapshot.brandColor ||
+    welcomeMessage !== savedSnapshot.welcomeMessage ||
+    logoUrl !== savedSnapshot.logoUrl ||
+    position !== savedSnapshot.position ||
+    launcherText !== savedSnapshot.launcherText ||
+    !areQuestionsEqual(suggestedQuestions, savedSnapshot.suggestedQuestions);
+
+  const handleConfirmReset = () => {
+    setBrandName(savedSnapshot.brandName);
+    setBrandColor(savedSnapshot.brandColor);
+    setWelcomeMessage(savedSnapshot.welcomeMessage);
+    setLogoUrl(savedSnapshot.logoUrl);
+    setPosition(savedSnapshot.position);
+    setLauncherText(savedSnapshot.launcherText);
+    setSuggestedQuestions([...savedSnapshot.suggestedQuestions]);
+    setNewQuestion("");
+    setQuestionError(null);
+    setDismissedFeedback(true);
+    setShowResetConfirm(false);
+  };
 
   const handleAddQuestion = () => {
     const trimmed = newQuestion.replace(/[\x00-\x1F\x7F]/g, "").trim();
@@ -95,7 +189,7 @@ export function WidgetSettingsForm({
           href={`/widget?key=${encodeURIComponent(publicWidgetKey)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/80"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/80"
         >
           <span>Open Live Widget</span>
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -118,24 +212,96 @@ export function WidgetSettingsForm({
         </div>
       )}
 
+      {/* Mobile/Tablet View Switcher (below lg) */}
+      <div className="mt-5 lg:hidden">
+        <div
+          role="tablist"
+          aria-label="Widget view switcher"
+          className="flex rounded-xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-800/80"
+        >
+          <button
+            type="button"
+            role="tab"
+            id="tab-settings"
+            aria-selected={activeTab === "settings"}
+            aria-controls="panel-settings"
+            onClick={() => setActiveTab("settings")}
+            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg min-h-[40px] px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "settings"
+                ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-preview"
+            aria-selected={activeTab === "preview"}
+            aria-controls="panel-preview"
+            onClick={() => setActiveTab("preview")}
+            className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg min-h-[40px] px-3 py-2 text-xs font-semibold transition-colors ${
+              activeTab === "preview"
+                ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
+                : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+            }`}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+              />
+            </svg>
+            <span>Preview</span>
+          </button>
+        </div>
+      </div>
+
       <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-12">
         {/* Left Column: Settings Form */}
-        <form action={formAction} className="space-y-5 lg:col-span-7">
-          {state.error && (
+        <form
+          id="panel-settings"
+          aria-labelledby="tab-settings"
+          action={formAction}
+          className={`space-y-5 lg:col-span-7 ${
+            activeTab === "settings" ? "block" : "hidden lg:block"
+          }`}
+        >
+          {state.error && !dismissedFeedback && (
             <div
               role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300"
+              className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-300"
             >
-              {state.error}
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{state.error}</span>
             </div>
           )}
 
-          {state.success && state.message && (
+          {state.success && state.message && !dismissedFeedback && (
             <div
               role="status"
-              className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-300"
+              aria-live="polite"
+              className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-300"
             >
-              {state.message}
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{state.message}</span>
             </div>
           )}
 
@@ -156,7 +322,10 @@ export function WidgetSettingsForm({
                 >
                   Brand Name
                 </label>
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                <span
+                  id="brand_name_counter"
+                  className="text-[11px] text-zinc-500 dark:text-zinc-400"
+                >
                   {brandName.length}/60
                 </span>
               </div>
@@ -170,7 +339,8 @@ export function WidgetSettingsForm({
                 value={brandName}
                 onChange={(e) => setBrandName(e.target.value)}
                 disabled={isReadOnly || isPending}
-                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                aria-describedby="brand_name_counter"
+                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
                 placeholder="e.g. Acme Support"
               />
             </div>
@@ -200,10 +370,17 @@ export function WidgetSettingsForm({
                   value={brandColor}
                   onChange={(e) => setBrandColor(e.target.value)}
                   disabled={isReadOnly || isPending}
-                  className="block flex-1 rounded-xl border border-zinc-300 bg-white px-3.5 py-2 font-mono text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                  aria-describedby="brand_color_help"
+                  className="block flex-1 rounded-xl border border-zinc-300 bg-white px-3.5 py-2 font-mono text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
                   placeholder="#0F172A"
                 />
               </div>
+              <p
+                id="brand_color_help"
+                className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400"
+              >
+                Hex color, e.g. #7c3aed
+              </p>
             </div>
           </div>
 
@@ -216,7 +393,10 @@ export function WidgetSettingsForm({
               >
                 Welcome Message
               </label>
-              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              <span
+                id="welcome_message_counter"
+                className="text-[11px] text-zinc-500 dark:text-zinc-400"
+              >
                 {welcomeMessage.length}/500
               </span>
             </div>
@@ -230,10 +410,14 @@ export function WidgetSettingsForm({
               value={welcomeMessage}
               onChange={(e) => setWelcomeMessage(e.target.value)}
               disabled={isReadOnly || isPending}
-              className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+              aria-describedby="welcome_message_counter welcome_message_help"
+              className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
               placeholder="Hi! How can we help you today?"
             />
-            <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <p
+              id="welcome_message_help"
+              className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400"
+            >
               The greeting message shown to visitors when they first open the chat widget.
             </p>
           </div>
@@ -254,9 +438,16 @@ export function WidgetSettingsForm({
                 value={logoUrl}
                 onChange={(e) => setLogoUrl(e.target.value)}
                 disabled={isReadOnly || isPending}
-                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                aria-describedby="logo_url_help"
+                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
                 placeholder="https://example.com/logo.png"
               />
+              <p
+                id="logo_url_help"
+                className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400"
+              >
+                Direct image URL for your brand logo (e.g. SVG or PNG).
+              </p>
             </div>
 
             {/* Position */}
@@ -273,7 +464,7 @@ export function WidgetSettingsForm({
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
                 disabled={isReadOnly || isPending}
-                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+                className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
               >
                 <option value="bottom-right">Bottom Right</option>
                 <option value="bottom-left">Bottom Left</option>
@@ -290,7 +481,10 @@ export function WidgetSettingsForm({
               >
                 Launcher Text (Optional)
               </label>
-              <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              <span
+                id="launcher_text_counter"
+                className="text-[11px] text-zinc-500 dark:text-zinc-400"
+              >
                 {launcherText.length}/30
               </span>
             </div>
@@ -302,10 +496,14 @@ export function WidgetSettingsForm({
               value={launcherText}
               onChange={(e) => setLauncherText(e.target.value)}
               disabled={isReadOnly || isPending}
-              className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
+              aria-describedby="launcher_text_counter launcher_text_help"
+              className="mt-1.5 block w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-base sm:text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400 dark:disabled:bg-zinc-800/50"
               placeholder="e.g. Chat with us"
             />
-            <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+            <p
+              id="launcher_text_help"
+              className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400"
+            >
               Optional button label displayed next to the chat launcher icon (up to 30 characters).
             </p>
           </div>
@@ -342,7 +540,7 @@ export function WidgetSettingsForm({
                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
                         {idx + 1}
                       </span>
-                      <span className="truncate font-medium text-zinc-800 dark:text-zinc-200">
+                      <span className="break-words font-medium text-zinc-800 [overflow-wrap:anywhere] dark:text-zinc-200">
                         {question}
                       </span>
                     </div>
@@ -377,7 +575,10 @@ export function WidgetSettingsForm({
                       >
                         Add a Question
                       </label>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                      <span
+                        id="new_question_counter"
+                        className="text-[10px] text-zinc-500 dark:text-zinc-400"
+                      >
                         {newQuestion.length}/100
                       </span>
                     </div>
@@ -398,8 +599,13 @@ export function WidgetSettingsForm({
                           }
                         }}
                         disabled={isPending}
+                        aria-describedby={
+                          questionError
+                            ? "new_question_counter new_question_error"
+                            : "new_question_counter"
+                        }
                         placeholder="e.g. How does your pricing work?"
-                        className="flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400"
+                        className="flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-base sm:text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-400"
                       />
                       <button
                         type="button"
@@ -418,7 +624,11 @@ export function WidgetSettingsForm({
                 )}
 
                 {questionError && (
-                  <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                  <p
+                    id="new_question_error"
+                    role="alert"
+                    className="text-xs font-medium text-red-600 dark:text-red-400"
+                  >
                     {questionError}
                   </p>
                 )}
@@ -427,20 +637,101 @@ export function WidgetSettingsForm({
           </div>
 
           {!isReadOnly && (
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={isPending}
-                className="inline-flex justify-center rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                {isPending ? "Saving settings..." : "Save Settings"}
-              </button>
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex justify-center rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                  {isPending ? "Saving settings..." : "Save Settings"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(true)}
+                  disabled={isPending || !isFormDirty}
+                  className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/80 min-h-[40px]"
+                >
+                  Reset changes
+                </button>
+
+                {state.success && state.message && !dismissedFeedback && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+                  >
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{state.message}</span>
+                  </p>
+                )}
+
+                {state.error && !dismissedFeedback && (
+                  <p
+                    role="alert"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400"
+                  >
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{state.error}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Confirmation before reset */}
+              {showResetConfirm && (
+                <div
+                  role="alertdialog"
+                  aria-labelledby="reset_confirm_title"
+                  aria-describedby="reset_confirm_desc"
+                  className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900/50 dark:bg-amber-950/40"
+                >
+                  <h4
+                    id="reset_confirm_title"
+                    className="text-sm font-semibold text-amber-900 dark:text-amber-200"
+                  >
+                    Discard unsaved changes?
+                  </h4>
+                  <p
+                    id="reset_confirm_desc"
+                    className="mt-1 text-xs text-amber-800 dark:text-amber-300"
+                  >
+                    Your changes will be reverted to the last saved settings.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleConfirmReset}
+                      className="inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 min-h-[40px] sm:min-h-0 text-xs font-semibold text-white shadow-2xs hover:bg-amber-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:bg-amber-500 dark:text-zinc-900 dark:hover:bg-amber-400"
+                    >
+                      Reset changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(false)}
+                      className="inline-flex items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 py-2 min-h-[40px] sm:min-h-0 text-xs font-medium text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </form>
 
         {/* Right Column: Live Client-Side Preview */}
-        <div className="lg:col-span-5">
+        <div
+          id="panel-preview"
+          aria-labelledby="tab-preview"
+          className={`lg:col-span-5 ${
+            activeTab === "preview" ? "block" : "hidden lg:block"
+          }`}
+        >
           <div className="sticky top-6 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -457,7 +748,7 @@ export function WidgetSettingsForm({
                 <button
                   type="button"
                   onClick={() => setIsPreviewOpen(true)}
-                  className={`rounded-md px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[36px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
+                  className={`rounded-md px-3 py-2 sm:px-2 sm:py-1 min-h-[40px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
                     isPreviewOpen
                       ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -468,7 +759,7 @@ export function WidgetSettingsForm({
                 <button
                   type="button"
                   onClick={() => setIsPreviewOpen(false)}
-                  className={`rounded-md px-2.5 py-1.5 sm:px-2 sm:py-1 min-h-[36px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
+                  className={`rounded-md px-3 py-2 sm:px-2 sm:py-1 min-h-[40px] sm:min-h-0 inline-flex items-center justify-center transition-colors ${
                     !isPreviewOpen
                       ? "bg-white text-zinc-900 shadow-2xs dark:bg-zinc-700 dark:text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -481,7 +772,7 @@ export function WidgetSettingsForm({
 
             {/* Preview Viewport Canvas */}
             <div
-              className={`relative flex min-h-[460px] flex-col justify-end overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-100/70 via-zinc-50 to-zinc-100 p-4 shadow-inner dark:border-zinc-800 dark:from-zinc-900/50 dark:via-zinc-950 dark:to-zinc-900/70 ${
+              className={`relative flex min-h-[460px] flex-col justify-end overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-b from-zinc-100/70 via-zinc-50 to-zinc-100 p-2.5 sm:p-4 shadow-inner dark:border-zinc-800 dark:from-zinc-900/50 dark:via-zinc-950 dark:to-zinc-900/70 ${
                 position === "bottom-left" ? "items-start" : "items-end"
               }`}
             >
