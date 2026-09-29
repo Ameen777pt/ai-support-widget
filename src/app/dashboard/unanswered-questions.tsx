@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { KnowledgeDocumentItem } from "./knowledge-section";
@@ -90,6 +90,12 @@ export function UnansweredQuestionsSection({
   const [publishSuccessMessage, setPublishSuccessMessage] = useState<string | null>(null);
   const [draftStep, setDraftStep] = useState<"edit" | "publish_preview">("edit");
 
+  // Focus & Accessibility Refs
+  const resolveSelectRef = useRef<HTMLSelectElement | null>(null);
+  const resolveCancelBtnRef = useRef<HTMLButtonElement | null>(null);
+  const draftTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const lastActiveElementRef = useRef<HTMLElement | null>(null);
+
   // 1. Calculate status counts
   const counts = useMemo(() => {
     return {
@@ -116,6 +122,9 @@ export function UnansweredQuestionsSection({
 
   // 3. Handlers
   const handleOpenResolveModal = (question: UnansweredQuestionItem) => {
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      lastActiveElementRef.current = document.activeElement;
+    }
     setActionError(null);
     setResolvingQuestion(question);
     setSelectedDocId(documents.length > 0 ? documents[0].id : "");
@@ -125,6 +134,10 @@ export function UnansweredQuestionsSection({
     setResolvingQuestion(null);
     setSelectedDocId("");
     setActionError(null);
+    if (lastActiveElementRef.current) {
+      lastActiveElementRef.current.focus();
+      lastActiveElementRef.current = null;
+    }
   };
 
   const handleConfirmResolve = () => {
@@ -186,6 +199,9 @@ export function UnansweredQuestionsSection({
   }, [editedContent, activeDraft]);
 
   const handleStartDraft = (question: UnansweredQuestionItem) => {
+    if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement) {
+      lastActiveElementRef.current = document.activeElement;
+    }
     setActionError(null);
     setGeneratingQuestionId(question.id);
     startTransition(async () => {
@@ -223,6 +239,10 @@ export function UnansweredQuestionsSection({
     setIsPublishing(false);
     setConfirmedPlaceholders(false);
     setDraftStep("edit");
+    if (lastActiveElementRef.current) {
+      lastActiveElementRef.current.focus();
+      lastActiveElementRef.current = null;
+    }
   };
 
   const handleRegenerateClick = () => {
@@ -332,6 +352,60 @@ export function UnansweredQuestionsSection({
       }
     });
   };
+
+  // Escape key handler for both modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+
+      if (resolvingQuestion) {
+        if (!isPending) {
+          handleCloseResolveModal();
+        }
+        return;
+      }
+
+      if (draftModalQuestion) {
+        if (isPublishing) return;
+        if (showRegenerateConfirm) {
+          setShowRegenerateConfirm(false);
+          return;
+        }
+        handleCloseDraftModal();
+      }
+    };
+
+    if (resolvingQuestion || draftModalQuestion) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }
+  }, [
+    resolvingQuestion,
+    draftModalQuestion,
+    isPending,
+    isPublishing,
+    showRegenerateConfirm,
+  ]);
+
+  // Focus management for Resolve modal
+  useEffect(() => {
+    if (resolvingQuestion) {
+      if (documents.length > 0) {
+        resolveSelectRef.current?.focus();
+      } else {
+        resolveCancelBtnRef.current?.focus();
+      }
+    }
+  }, [resolvingQuestion, documents.length]);
+
+  // Focus management for Draft modal
+  useEffect(() => {
+    if (draftModalQuestion && draftStep === "edit") {
+      draftTitleInputRef.current?.focus();
+    }
+  }, [draftModalQuestion, draftStep]);
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -601,11 +675,23 @@ export function UnansweredQuestionsSection({
       {/* Resolve with Knowledge Document Modal */}
       {resolvingQuestion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resolve_gap_modal_title"
+            aria-describedby="resolve_gap_modal_desc"
+            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <h3
+              id="resolve_gap_modal_title"
+              className="text-base font-semibold text-zinc-900 dark:text-zinc-100"
+            >
               Resolve Knowledge Gap
             </h3>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p
+              id="resolve_gap_modal_desc"
+              className="mt-1 text-xs text-zinc-500 dark:text-zinc-400"
+            >
               Select the workspace knowledge article that answers this customer question.
             </p>
 
@@ -640,6 +726,7 @@ export function UnansweredQuestionsSection({
                 </div>
               ) : (
                 <select
+                  ref={resolveSelectRef}
                   value={selectedDocId}
                   onChange={(e) => setSelectedDocId(e.target.value)}
                   className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
@@ -661,6 +748,7 @@ export function UnansweredQuestionsSection({
 
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
+                ref={resolveCancelBtnRef}
                 type="button"
                 onClick={handleCloseResolveModal}
                 disabled={isPending}
@@ -687,13 +775,22 @@ export function UnansweredQuestionsSection({
       {/* AI Knowledge Draft Review & Editor Modal */}
       {draftModalQuestion && activeDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="my-8 w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 max-h-[90vh] overflow-y-auto">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="draft_modal_title"
+            aria-describedby="draft_modal_desc"
+            className="my-8 w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 max-h-[90vh] overflow-y-auto"
+          >
             {draftStep === "edit" ? (
               <>
                 {/* Modal Header */}
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
                   <div className="flex items-center gap-2.5">
-                    <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    <h3
+                      id="draft_modal_title"
+                      className="text-base font-semibold text-zinc-900 dark:text-zinc-100"
+                    >
                       AI Knowledge Draft Review
                     </h3>
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800/60">
@@ -719,7 +816,10 @@ export function UnansweredQuestionsSection({
                     <span className="font-semibold text-amber-950 dark:text-amber-100">
                       AI Draft Notice:
                     </span>
-                    <p className="mt-0.5 text-amber-800 dark:text-amber-300 leading-relaxed">
+                    <p
+                      id="draft_modal_desc"
+                      className="mt-0.5 text-amber-800 dark:text-amber-300 leading-relaxed"
+                    >
                       This article was generated by AI based on the customer query and available workspace context. It is an editable draft and must be reviewed, fact-checked, and completed before publishing.
                     </p>
                   </div>
@@ -811,6 +911,7 @@ export function UnansweredQuestionsSection({
                     </span>
                   </div>
                   <input
+                    ref={draftTitleInputRef}
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
@@ -945,7 +1046,10 @@ export function UnansweredQuestionsSection({
                 {/* Modal Header */}
                 <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
                   <div className="flex items-center gap-2.5">
-                    <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    <h3
+                      id="draft_modal_title"
+                      className="text-base font-semibold text-zinc-900 dark:text-zinc-100"
+                    >
                       Knowledge Draft: Publish Preview
                     </h3>
                     <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 border border-indigo-200 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800">
@@ -968,7 +1072,10 @@ export function UnansweredQuestionsSection({
                   <span className="font-semibold text-blue-950 dark:text-blue-100">
                     Draft Validated &amp; Ready to Publish:
                   </span>
-                  <p className="mt-0.5 text-blue-800 dark:text-blue-300 leading-relaxed">
+                  <p
+                    id="draft_modal_desc"
+                    className="mt-0.5 text-blue-800 dark:text-blue-300 leading-relaxed"
+                  >
                     Publishing will immediately create this knowledge document in your workspace and mark this knowledge gap as resolved. This action is permanent and updates your live knowledge base.
                   </p>
                 </div>
