@@ -139,7 +139,7 @@ export default async function DashboardPage(props: DashboardPageProps) {
 
   return (
     <div className="min-h-screen bg-zinc-50 p-4 sm:p-6 lg:p-8 dark:bg-zinc-950">
-      <div className="mx-auto max-w-5xl space-y-6 sm:space-y-8">
+      <div className="mx-auto max-w-7xl space-y-6 sm:space-y-8">
         {/* Top Header */}
         <header className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
           <div>

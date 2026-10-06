@@ -363,7 +363,7 @@ export function OverviewSection({
                     </span>
                   </div>
                   <span className="text-[11px] text-indigo-600 dark:text-indigo-400">
-                    Draft response with AI →
+                    Review in Knowledge Gaps →
                   </span>
                 </Link>
               ))
