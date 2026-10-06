@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import Link from "next/link";
 
 export type DashboardView = "overview" | "inbox" | "knowledge" | "gaps" | "widget";
@@ -53,8 +54,37 @@ export function DashboardNav({
     },
   ];
 
+  const navRef = useRef<HTMLElement | null>(null);
+  const activeTabRef = useRef<HTMLAnchorElement | null>(null);
+
+  useEffect(() => {
+    const frameId = requestAnimationFrame(() => {
+      const nav = navRef.current;
+      const activeTab = activeTabRef.current;
+
+      if (!nav || !activeTab) return;
+
+      if (nav.scrollWidth > nav.clientWidth) {
+        const navRect = nav.getBoundingClientRect();
+        const tabRect = activeTab.getBoundingClientRect();
+
+        const navCenter = navRect.left + navRect.width / 2;
+        const tabCenter = tabRect.left + tabRect.width / 2;
+        const offsetDiff = tabCenter - navCenter;
+
+        nav.scrollTo({
+          left: nav.scrollLeft + offsetDiff,
+          behavior: "smooth",
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [activeView]);
+
   return (
     <nav
+      ref={navRef}
       aria-label="Dashboard navigation"
       className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 scrollbar-none"
     >
@@ -64,10 +94,11 @@ export function DashboardNav({
         return (
           <Link
             key={item.id}
+            ref={isActive ? activeTabRef : undefined}
             href={item.href}
             scroll={false}
             aria-current={isActive ? "page" : undefined}
-            className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all min-h-[40px] ${
+            className={`inline-flex shrink-0 md:flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all min-h-[40px] whitespace-nowrap ${
               isActive
                 ? "bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900"
                 : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
